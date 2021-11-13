@@ -1,0 +1,1 @@
+mindspore-gpu >= 1.5.0
