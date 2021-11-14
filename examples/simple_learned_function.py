@@ -19,13 +19,13 @@ for epoch in range(100):
     for start in range(0,100,batch_size):
         end = start + batch_size
         w.zero_grad()
+        # print(w.grad.shape)
         b.zero_grad()
         inputs = x_data[start:end]
     # TODO: implement batching
     # TODO: implement matrix multiplication
         predicted = inputs @ w + b
         actual = y_data[start:end]
-
         errors = predicted - actual
         loss = (errors * errors).sum()
 

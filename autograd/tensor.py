@@ -1,12 +1,9 @@
 import numpy as np
 from typing import List, NamedTuple, Callable, Optional, Union
-import mindspore.ops.functional as F
 import mindspore.ops.operations as P
-import mindspore.ops.composite as C
-from mindspore.ops.composite.multitype_ops._compile_utils import _tensor_getitem, _tensor_getitem
 from mindspore._c_expression import Tensor as _Tensor
-
 from mindspore.common import dtype as mstype
+from ._utils import _tensor_getitem
 
 class Dependency(NamedTuple):
     tensor: 'Tensor'
@@ -42,6 +39,17 @@ def ensure_dtype(*dtypes):
         return mstype.int32
     return dtypes[0]
 
+def ensure_matmul_candidates(t, dim):
+    t_data = t if len(t.shape) == 2 else P.ExpandDims()(t, dim)
+    return t_data
+
+def matmul_postprocess(data, t1_ndim, t2_ndim):
+    if t1_ndim == 1:
+        data = P.Squeeze(0)(data)
+    if t2_ndim == 1:
+        data = P.Squeeze(1)(data)
+    return data
+
 class Tensor:
     def __init__(self,
                  data: Arrayable,
@@ -62,7 +70,7 @@ class Tensor:
         self.grad = Tensor(np.zeros_like(self.data.asnumpy()))
 
     def __repr__(self) -> str:
-        return f"Tensor({self.data}, requires_grad={self.requires_grad})"
+        return f"Tensor({self.data.asnumpy()}, requires_grad={self.requires_grad})"
 
     def __add__(self, other) -> 'Tensor':
         """
@@ -132,18 +140,18 @@ class Tensor:
             else:
                 raise RuntimeError("grad must specified for non-0-tensor")
 
-        self.grad.data = F.tensor_add(self.grad.data, grad.data)
+        self.grad.data = P.Add()(self.grad.data, grad.data)
         for dependency in self.depends_on:
             backward_grad = dependency.grad_fn(grad.data)
             dependency.tensor.backward(Tensor(backward_grad))
 
 def tensor_sum(t: Tensor) -> Tensor:
     data_dtype = ensure_dtype(t.data.dtype)
-    data = F.reduce_sum(P.Cast()(t.data, mstype.float32), 0)
+    data = P.ReduceSum()(P.Cast()(t.data, mstype.float32), 0)
     requires_grad = t.requires_grad
     if requires_grad:
         def grad_fn(grad: _Tensor) -> _Tensor:
-            return grad * F.ones_like(t.data)
+            return grad * P.OnesLike()(t.data)
         depends_on = [Dependency(t, grad_fn)]
     else:
         depends_on = []
@@ -274,20 +282,23 @@ def _matmul(t1: Tensor, t2:Tensor) -> Tensor:
     assert len(t1.data.shape) <= 2, f"Tensor {t1} should not be greater 2 dims, but get {len(t1.data.shape)}"
     assert len(t2.data.shape) <= 2, f"Tensor {t2} should not be greater 2 dims, but get {len(t2.data.shape)}"
     data_dtype = ensure_dtype(t1.data.dtype, t2.data.dtype)
-    t1_data = t1.data if t1.ndim == 2 else P.ExpandDims()(t1.data, 0)
-    t2_data = t2.data if t2.ndim == 2 else P.ExpandDims()(t2.data, 1)
+    t1_data = ensure_matmul_candidates(t1.data, 0)
+    t2_data = ensure_matmul_candidates(t2.data, 1)
     data = P.MatMul()(P.Cast()(t1_data, mstype.float32), P.Cast()(t2_data, mstype.float32))
+    data = matmul_postprocess(data, t1.ndim, t2.ndim)
     requires_grad = t1.requires_grad or t2.requires_grad
-
     depends_on: List[Dependency] = []
 
     if t1.requires_grad:
         def grad_fn1(grad: _Tensor) -> _Tensor:
             grad_dtype = ensure_dtype(grad.dtype, t2.data.dtype)
             perm = tuple(range(t2.ndim - 1, -1, -1))
-
             t2_T = P.Transpose()(P.Cast()(t2.data, mstype.float32), perm)
+            grad_ndim, t2_T_ndim = len(grad.shape), len(t2_T.shape)
+            grad = ensure_matmul_candidates(grad, 0)
+            t2_T = ensure_matmul_candidates(t2_T, 1)
             grad = P.MatMul()(P.Cast()(grad, mstype.float32), t2_T)
+            grad = matmul_postprocess(grad, grad_ndim, t2_T_ndim)
             return P.Cast()(grad, grad_dtype)
         depends_on.append(Dependency(t1, grad_fn1))
 
@@ -296,7 +307,11 @@ def _matmul(t1: Tensor, t2:Tensor) -> Tensor:
             grad_dtype = ensure_dtype(grad.dtype, t1.data.dtype)
             perm = tuple(range(t1.ndim - 1, -1, -1))
             t1_T = P.Transpose()(P.Cast()(t1.data, mstype.float32), perm)
+            grad_ndim, t2_T_ndim = len(grad.shape), len(t1_T.shape)
+            grad = ensure_matmul_candidates(grad, 1)
+            t1_T = ensure_matmul_candidates(t1_T, 0)
             grad = P.MatMul()(t1_T, P.Cast()(grad, mstype.float32))
+            grad = matmul_postprocess(grad, t2_T_ndim, grad_ndim)
             return P.Cast()(grad, grad_dtype)
         depends_on.append(Dependency(t2, grad_fn2))
 
@@ -305,16 +320,16 @@ def _matmul(t1: Tensor, t2:Tensor) -> Tensor:
         depends_on
     )
 
-def _slice(t: Tensor, *idx) -> Tensor:
+def _slice(t: Tensor, idx) -> Tensor:
     """
     t2 = t1[3:4,4:4]
-    """ 
+    """
     data = _tensor_getitem(t.data, idx)
     requires_grad = t.requires_grad
     if requires_grad:
         def grad_fn(grad: _Tensor) -> _Tensor:
             bigger_grad = P.ZerosLike()(data)
-            bigger_grad = _tensor_getitem(bigger_grad, idx, grad)
+            # bigger_grad = _tensor_getitem(bigger_grad, idx, grad)
             return bigger_grad
         depends_on = Dependency(t, grad_fn)
     else:
