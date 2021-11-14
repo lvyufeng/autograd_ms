@@ -25,9 +25,9 @@ def ensure_array(arrayable: Arrayable, dtype) -> _Tensor:
     else:
         if dtype is None:
             arrayable = np.array(arrayable)
-            if arrayable.dtype is np.float64:
+            if arrayable.dtype == np.float64:
                 arrayable = arrayable.astype(np.float32)
-            if arrayable.dtype is np.int64:
+            if arrayable.dtype == np.int64:
                 arrayable = arrayable.astype(np.int32)
             return _Tensor(arrayable)
     return _Tensor(arrayable, dtype)
@@ -40,7 +40,9 @@ def ensure_dtype(*dtypes):
     return dtypes[0]
 
 def ensure_matmul_candidates(t, dim):
-    t_data = t if len(t.shape) == 2 else P.ExpandDims()(t, dim)
+    assert dim in [0, 1]
+    shape = (1,) + tuple(t.shape) if dim == 0 else tuple(t.shape) + (1,)
+    t_data = t if len(t.shape) == 2 else P.Reshape()(t, shape)
     return t_data
 
 def matmul_postprocess(data, t1_ndim, t2_ndim):
@@ -147,7 +149,7 @@ class Tensor:
 
 def tensor_sum(t: Tensor) -> Tensor:
     data_dtype = ensure_dtype(t.data.dtype)
-    data = P.ReduceSum()(P.Cast()(t.data, mstype.float32), 0)
+    data = P.ReduceSum()(P.Cast()(t.data, mstype.float32))
     requires_grad = t.requires_grad
     if requires_grad:
         def grad_fn(grad: _Tensor) -> _Tensor:

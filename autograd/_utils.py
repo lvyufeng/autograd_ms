@@ -1,4 +1,4 @@
-from mindspore.common import tensor
+import numpy as np
 import mindspore.ops.operations as P
 
 def _tensor_getitem(data, index):
@@ -21,9 +21,34 @@ def _tensor_getitem(data, index):
     raise IndexError(f"Only support integers, slices(`:`), ellipsis(`...`), None, bool, tensor with int, "
                      f"list and tuple ,but got {index} with type {type(index)}.")
 
-def _tensor_setitem():
-    pass
+def _tensor_setitem(t, index, value):
+    if not isinstance(value, (int, float, bool, list, tuple, 'Tensor')):
+        raise ValueError(f"only support numbers, Tensor, tuple, list as value,"
+                         f"but got {value} with type {type(value)}.")
+    if isinstance(index, list):
+        pass
+        # index = format_list_indices(index, self.shape[0])
+    if isinstance(index, 'Tensor'):
+        pass
+        # return tensor_setitem_by_tensor(self, index, value)
+    if isinstance(index, tuple):
+        pass
+        # return tensor_setitem_by_tuple(self, index, value)
+    if isinstance(index, bool):
+        pass
+        # return tensor_setitem_by_bool(self, index, value)
+    if isinstance(index, int):
+        pass
+        # return tensor_setitem_by_number(self, index, value)
+    if isinstance(index, slice):
+        pass
+        # return tensor_setitem_by_slice(self, index, value)
+    if index in (None, ...):
+        pass
+        # return tensor_setitem_by_ellipsis(self, index, value)
 
+    raise IndexError("Tensor setitem index only support integers, slices(`:`), ellipsis(`...`), bool, tensor, \
+        list and tuple, but got {index} with type{type(index)}")
 def tensor_index_by_tensor(data, tensor_index):
     return P.Gather()(data, tensor_index, 0)
 
@@ -77,4 +102,4 @@ def get_slice_stride(index_slice, dim_size):
         stop_default = -(dim_size + 1)
     start = start_default if index_slice.start is None else index_slice.start
     stop = stop_default if index_slice.stop is None else index_slice.stop
-    return start, stop, step
+    return int(start), int(stop), int(step)
