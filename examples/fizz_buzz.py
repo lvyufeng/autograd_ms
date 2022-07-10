@@ -11,7 +11,6 @@ sys.path.append('.')
 from autograd import Tensor, Parameter, Module
 from autograd.optim import SGD
 from autograd.function import tanh
-
 from typing import List
 
 def binary_encode(x: int) -> List[int]:

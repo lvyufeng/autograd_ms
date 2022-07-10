@@ -1,5 +1,5 @@
 import numpy as np
-import mindspore.ops.operations as P
+import mindspore.ops as ops
 
 def _tensor_getitem(data, index):
     # if isinstance(index, 'Tensor'):
@@ -15,7 +15,7 @@ def _tensor_getitem(data, index):
     if isinstance(index, slice):
         return tensor_index_by_slice(data, index)
     if index is None:
-        return P.ExpandDims()(data, 0)
+        return data.expand_dims(0)
     if index is ...:
         return data
     raise IndexError(f"Only support integers, slices(`:`), ellipsis(`...`), None, bool, tensor with int, "
@@ -49,8 +49,9 @@ def _tensor_setitem(t, index, value):
 
     raise IndexError("Tensor setitem index only support integers, slices(`:`), ellipsis(`...`), bool, tensor, \
         list and tuple, but got {index} with type{type(index)}")
+
 def tensor_index_by_tensor(data, tensor_index):
-    return P.Gather()(data, tensor_index, 0)
+    return ops.gather(data, tensor_index, 0)
 
 def tensor_index_by_slice(data, slice_index):
     """Tensor getitem by a slice."""
@@ -59,12 +60,12 @@ def tensor_index_by_slice(data, slice_index):
     if is_dynamic:
         return tensor_index_by_dyn_slice(data, slice_index)
     begin_strides, end_strides, step_strides = get_stride_info_from_slice(data_shape, slice_index)
-    return P.StridedSlice()(data, begin_strides, end_strides, step_strides)
+    return ops.strided_slice(data, begin_strides, end_strides, step_strides)
 
 def tensor_index_by_dyn_slice(data, slice_index):
     """Tensor getitem by a slice."""
     data_dims = data.ndim
-    data_shape = P.DynamicShape()(data)
+    data_shape = data.shape
     begin_strides, end_strides, step_strides = [], [], []
     start, stop, step = get_slice_stride(slice_index, data_shape[0])
     begin_strides.append(start)
@@ -78,7 +79,7 @@ def tensor_index_by_dyn_slice(data, slice_index):
     begin_tensor = tuple(begin_strides)
     end_tensor = tuple(end_strides)
     step_tensor = tuple(step_strides)
-    return P.StridedSlice()(data, begin_tensor, end_tensor, step_tensor)
+    return ops.strided_slice(data, begin_tensor, end_tensor, step_tensor)
 
 def get_stride_info_from_slice(data_shape, slice_index):
     """Get stride info from a python slice"""

@@ -1,7 +1,9 @@
 import inspect
 from typing import Iterator
 from autograd.parameter import Parameter
+from mindspore import ms_class, ms_function
 
+@ms_class
 class Module:
     def parameters(self) -> Iterator[Parameter]:
         for name, value in inspect.getmembers(self):
@@ -14,6 +16,7 @@ class Module:
         for parameter in self.parameters():
             parameter.zero_grad()
 
+    @ms_function
     def forward(self, *input):
         raise NotImplementedError
 

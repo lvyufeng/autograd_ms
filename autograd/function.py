@@ -1,4 +1,4 @@
-import mindspore.ops.operations as P
+import mindspore.ops as ops
 from autograd.tensor import Tensor, Dependency
 from mindspore._c_expression import Tensor as _Tensor
 
@@ -6,7 +6,7 @@ def tanh(tensor: Tensor) -> Tensor:
     '''
     tanh = 
     '''
-    data = P.Tanh()(tensor.data)
+    data = ops.tanh(tensor.data)
     requires_grad = tensor.requires_grad
 
     if requires_grad:

@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 from autograd.tensor import Tensor
 
 class TestTensorSum(unittest.TestCase):
@@ -15,7 +16,7 @@ class TestTensorSum(unittest.TestCase):
 
         t1 += 0.1
         assert t1.grad is None
-        assert t1.data.asnumpy().tolist() == [1.1, 2.1, 3.1]
+        assert np.allclose(t1.data.asnumpy(), np.array([1.1, 2.1, 3.1]), 1e-5, 1e-5)
 
     def test_broadcast_add(self):
         # broadcasting? A couple of things:
